@@ -8,7 +8,7 @@ kexecUrl=""
 kexecExtraFlags=""
 enableDebug=""
 diskoScript=""
-diskoMode="disko"
+diskoMode="destroyFormatMount"
 nixosSystem=""
 extraFiles=""
 vmTest="n"
@@ -123,12 +123,13 @@ Options:
   disko: first unmount and destroy all filesystems on the disks we want to format, then run the create and mount mode
   install: install the system
   reboot: unmount the filesystems, export any ZFS pools and reboot the machine
-* --disko-mode disko|mount|format
-  set the disko mode to format, mount or destroy. Default is disko.
-  disko: first unmount and destroy all filesystems on the disks we want to format, then run the create and mount mode
-  mount: mount the partition at the specified root-mountpoint
-  format: create partition tables, zpools, lvms, raids and filesystems (Experimental: Can be run increntally, but use with caution and good backups)
-USAGE
+* --disko-mode
+  comma separated list of disko modes to run. Default is: destroyFormatMount
+  destroy: unmount filesystems and destroy partition tables of the selected disks
+  format: create partition tables, zpools, lvms, raids and filesystems if they don't exist yet
+  mount: mount the partitions at the specified root-mountpoint
+  formatMount: run format and mount in sequence
+  destroyFormatMount: run all three modes in sequence. Previously known as --disko-mode disko
 }
 
 abort() {
@@ -219,11 +220,11 @@ parseArgs() {
       ;;
     --disko-mode)
       case "$2" in
-      format | mount | disko)
+      destroy | format | mount | formatMount | destroyFormatMount)
         diskoMode=$2
         ;;
       *)
-        abort "Supported values for --disko-mode are disko, mount and format. Unknown mode : $2"
+        abort "Supported values for --disko-mode are disko, mount, format, formatMount and destroyFormatMount. Unknown mode : $2"
         ;;
       esac
 
@@ -561,17 +562,21 @@ runDisko() {
     step Building disko script
     # We need to do a nix copy first because nix build doesn't have --no-check-sigs
     # Use ssh:// here to avoid https://github.com/NixOS/nix/issues/7359
-    nixCopy --to "ssh://$sshConnection" "${flake}#${flakeAttr}.system.build.${diskoMode}Script" \
+    nixCopy --to "ssh://$sshConnection" "${flake}#${flakeAttr}.system.build.${diskoMode}" \
       --derivation --no-check-sigs
     # If we don't use ssh-ng here, we get `error: operation 'getFSAccessor' is not supported by store`
     diskoScript=$(
-      nixBuild "${flake}#${flakeAttr}.system.build.${diskoMode}Script" \
+      nixBuild "${flake}#${flakeAttr}.system.build.${diskoMode}" \
         --eval-store auto --store "ssh-ng://$sshConnection?ssh-key=$sshKeyDir/nixos-anywhere"
     )
   fi
-
   step Formatting hard drive with disko
-  runSsh "$diskoScript"
+  if [[ -d ${diskoScript} ]]; then
+    diskoScriptBin=(${diskoScript}/bin/*)
+    runSsh "${diskoScriptBin[0]} --yes-wipe-all-disks"
+  else
+    runSsh "$diskoScript"
+  fi
 }
 
 nixosInstall() {
@@ -648,7 +653,7 @@ main() {
   if [[ -n ${flake} ]]; then
     if [[ ${buildOnRemote} == "n" ]] && [[ ${hardwareConfigBackend} == "none" ]]; then
       if [[ ${phases[disko]} == 1 ]]; then
-        diskoScript=$(nixBuild "${flake}#${flakeAttr}.system.build.${diskoMode}Script")
+        diskoScript=$(nixBuild "${flake}#${flakeAttr}.system.build.${diskoMode}")
       fi
       nixosSystem=$(nixBuild "${flake}#${flakeAttr}.system.build.toplevel")
     fi
@@ -710,7 +715,7 @@ main() {
 
   if [[ ${buildOnRemote} == "n" ]] && [[ -n ${flake} ]] && [[ ${hardwareConfigBackend} != "none" ]]; then
     if [[ ${phases[disko]} == 1 ]]; then
-      diskoScript=$(nixBuild "${flake}#${flakeAttr}.system.build.${diskoMode}Script")
+      diskoScript=$(nixBuild "${flake}#${flakeAttr}.system.build.${diskoMode}")
     fi
     nixosSystem=$(nixBuild "${flake}#${flakeAttr}.system.build.toplevel")
   fi
