@@ -98,6 +98,12 @@ variable "phases" {
   default     = ["kexec", "disko", "install", "reboot"]
 }
 
+variable "disko_mode" {
+  type        = string
+  description = "Disko modes to run. See `nixos-anywhere --help` for more information"
+  default     = "destroyFormatMount"
+}
+
 variable "build_on_remote" {
   type        = bool
   description = "Build the closure on the remote machine instead of building it locally and copying it over"

@@ -37,6 +37,7 @@ elif [[ -n ${input[nixos_facter_path]} ]]; then
   args+=("--generate-hardware-config" "nixos-facter" "${input[nixos_facter_path]}")
 fi
 args+=(--phases "${input[phases]}")
+args+=(--disko_mode "${input[disko_mode]}")
 if [[ ${input[ssh_private_key]} != null ]]; then
   export SSH_PRIVATE_KEY="${input[ssh_private_key]}"
 fi
