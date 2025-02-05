@@ -130,6 +130,7 @@ Options:
   mount: mount the partitions at the specified root-mountpoint
   formatMount: run format and mount in sequence
   destroyFormatMount: run all three modes in sequence. Previously known as --disko-mode disko
+USAGE
 }
 
 abort() {
